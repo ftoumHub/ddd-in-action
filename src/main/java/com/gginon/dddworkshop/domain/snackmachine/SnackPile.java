@@ -19,11 +19,11 @@ public class SnackPile extends ValueObject {
 
     public SnackPile(Snack snack, int quantity, BigDecimal price) {
         if(quantity < 0) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("Quantity must be positive.");
         }
 
         if(price.compareTo(ZERO) < 0) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("Price must be positive.");
         }
 
         if(price.remainder(new BigDecimal("0.01")).compareTo(ZERO) > 0) {

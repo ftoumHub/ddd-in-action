@@ -13,25 +13,19 @@ import static java.math.BigDecimal.ZERO;
 import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toUnmodifiableList;
 
 @Getter
 public class SnackMachine extends AggregateRoot {
 
     private Money moneyInside;
     private BigDecimal moneyInTransaction;
-    @Getter(AccessLevel.NONE)
-    @Setter(AccessLevel.NONE)
-    private List<Slot> slots;
+    private Map<Integer, Slot> slots;
 
     public SnackMachine() {
         moneyInside = NONE;
         moneyInTransaction = ZERO;
-
-        slots = asList(
-                new Slot(this, 1),
-                new Slot(this, 2),
-                new Slot(this, 3)
-        );
+        slots = Map.of(1, new Slot(1), 2, new Slot(2), 3, new Slot(3));
     }
 
     public void loadMoney(Money money) {
@@ -53,8 +47,8 @@ public class SnackMachine extends AggregateRoot {
         moneyInside = Money.subtract(moneyInside, money);
     }
 
-    public void buySnack(int position) {
-        String canBuyMessage = canBuySnack(position);
+    public Snack buyOneSnack(int position) {
+        String canBuyMessage = canBuySnackAt(position);
 
         if (canBuyMessage.equals("The snack pile is empty")) {
             throw new IllegalArgumentException(canBuyMessage);
@@ -64,19 +58,23 @@ public class SnackMachine extends AggregateRoot {
             throw new IllegalStateException(canBuyMessage);
         }
 
-        Slot slot = slots.stream().filter(s -> s.getPosition() == position).findFirst().orElse(null);
-        Money allocated = moneyInside.allocate(moneyInTransaction.subtract(slot.getSnackPile().getPrice()));
-        slot.setSnackPile(slot.getSnackPile().subtractOne());
+        Slot slot = slots.get(position).decreaseSnackPileByOne();
+
+        Money allocated = moneyInside.allocate(moneyInTransaction.subtract(slot.getSnackPrice()));
         moneyInside = Money.subtract(moneyInside, allocated);
         moneyInTransaction = ZERO;
+
+        return slot.getSnackPile().getSnack();
     }
 
     public void loadSnacks(int position, SnackPile snackPile) {
-        Slot slot = slots.stream().filter(s -> s.getPosition() == position).findFirst().orElse(null);
-        slot.setSnackPile(snackPile);
+        if (position > slots.size()) {
+            throw new IllegalArgumentException("Only " + slots.size() + " available!");
+        }
+        slots.get(position).setSnackPile(snackPile);
     }
 
-    public String canBuySnack(int position) {
+    public String canBuySnackAt(int position) {
         SnackPile snackPile = getSnackPile(position);
         if (snackPile.getQuantity() <= 0) {
             return "The snack pile is empty";
@@ -94,27 +92,28 @@ public class SnackMachine extends AggregateRoot {
     }
 
     public SnackPile getSnackPile(int position) {
-        return slots.stream().filter(s -> s.getPosition() == position).findFirst().orElse(null).getSnackPile();
+        if (position > slots.size()) {
+            throw new IllegalArgumentException("Only " + slots.size() + " available!");
+        }
+        return slots.get(position).getSnackPile();
     }
 
     public List<SnackPile> getAllSnackPiles() {
-        List<SnackPile> piles = slots
-                .stream()
-                .map(Slot::getSnackPile).collect(toList());
-        piles.sort(Comparator.comparingInt(SnackPile::getQuantity));
-
-        return unmodifiableList(piles);
+        return slots.values().stream()
+                .map(Slot::getSnackPile)
+                .sorted(Comparator.comparingInt(SnackPile::getQuantity))
+                .collect(toUnmodifiableList());
     }
 
     public static class SnackMachineBuilder {
         private long id;
-        private List<Slot> slots;
+        private Map<Integer, Slot> slots;
 
         public SnackMachineBuilder(long id) {
             this.id = id;
         }
 
-        public SnackMachineBuilder withSlots(List<Slot> slots) {
+        public SnackMachineBuilder withSlots(Map<Integer, Slot> slots) {
             this.slots = slots;
             return this;
         }
